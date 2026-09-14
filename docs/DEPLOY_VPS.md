@@ -43,6 +43,22 @@ server {
     # Bloqueia segredos e pastas internas
     location ~ /\.(?!well-known) { deny all; }
     location = /.env { deny all; }
+
+    # Endpoints autenticados que precisam permanecer acessíveis. Estes blocos
+    # exatos têm precedência sobre o bloqueio da pasta /secure/ abaixo.
+    location = /secure/conta.php {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/run/php/php8.2-fpm.sock;
+    }
+    location = /secure/save_profile.php {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/run/php/php8.2-fpm.sock;
+    }
+    location = /secure/ibge_locations.php {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/run/php/php8.2-fpm.sock;
+    }
+
     location ^~ /secure/ { deny all; }
     location ^~ /storage/ { deny all; }
     location ^~ /scripts/ { deny all; }
@@ -71,8 +87,8 @@ server {
 - Em `php.ini`:
   - `display_errors = Off`
   - `log_errors = On`
-  - `upload_max_filesize = 6M`
-  - `post_max_size = 12M`
+  - `upload_max_filesize = 100M`
+  - `post_max_size = 110M`
 - Reiniciar serviços:
   - `sudo systemctl restart php8.2-fpm nginx`
 

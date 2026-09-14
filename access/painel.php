@@ -269,7 +269,7 @@ try {
     <link rel="icon" href="/img/logomenor.png" type="image/png">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="../assets/theme.css?v=20260513">
+    <link rel="stylesheet" href="../assets/theme.css?v=20260810">
     <style>
         body { background-color: #f0f4f8; font-family: 'Inter', sans-serif; }
         .card-shadow { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03); }
@@ -379,6 +379,18 @@ try {
             font-weight: 800;
             line-height: 1;
         }
+        .site-navbar { background: #0b2a52; transition: box-shadow .2s ease; }
+        .site-navbar.is-scrolled { box-shadow: 0 8px 22px rgba(2, 19, 43, .18); }
+        .nav-link { display: inline-flex; align-items: center; gap: .55rem; color: rgba(255,255,255,.88); font-size: .92rem; font-weight: 600; transition: color .18s ease; }
+        .nav-link:hover, .nav-link[aria-expanded="true"] { color: #fff; }
+        #site-navbar [data-nav-products] { display: inline-flex !important; position: relative; visibility: visible !important; opacity: 1 !important; }
+        .nav-products { position: relative; }
+        .nav-products-badge { position: absolute; left: 50%; top: -1.55rem; transform: translateX(-50%); border-radius: 999px; background: #2563eb; padding: .25rem .6rem; color: #fff; font-size: .62rem; font-weight: 900; letter-spacing: .04em; box-shadow: 0 5px 12px rgba(37,99,235,.35); }
+        .site-navbar button[aria-label*="Notifica"], .site-navbar button[aria-label*="Notifica"] + span { display: none !important; }
+        .category-dropdown { transform-origin: top center; transition: opacity .16s ease, transform .16s ease; }
+        .category-dropdown.is-hidden { opacity: 0; transform: translateY(-6px) scale(.98); pointer-events: none; }
+        .category-item { display: flex; align-items: center; gap: .7rem; border-radius: .55rem; padding: .65rem .75rem; color: #16345f; font-size: .88rem; font-weight: 600; transition: background-color .16s ease, color .16s ease; }
+        .category-item:hover { background: #eff6ff; color: #0755d9; }
         @media (max-width: 640px) {
             .brand-title { font-size: 0.95rem; }
             .sidebar-sticky { position: static; }
@@ -412,27 +424,52 @@ try {
     </style>
 </head>
 <body class="min-h-screen text-slate-900 bg-slate-50 selection:bg-blue-200 selection:text-blue-900">
-    <nav class="fixed top-0 w-full z-50 bg-blue-900/95 text-white backdrop-blur-md border-b border-blue-800/60">
+    <nav id="site-navbar" class="site-navbar fixed top-0 z-50 w-full border-b border-white/10 text-white">
+        <div class="mx-auto flex h-[76px] max-w-none items-center justify-between gap-5 px-[5.5vw]">
+            <a href="<?php echo htmlspecialchars(appPath('/index.html'), ENT_QUOTES, 'UTF-8'); ?>" class="flex min-w-0 shrink-0 items-center gap-3 font-black text-white" aria-label="Ir para a página inicial"><img src="../img/logomenor.png" alt="Logo Clube dos Parceiros" class="h-11 w-auto object-contain sm:h-12"><span class="truncate text-base sm:text-lg">Clube dos Parceiros</span></a>
+            <div class="hidden flex-1 items-center justify-center gap-12 xl:gap-16 lg:flex">
+                <a href="<?php echo htmlspecialchars(appPath('/access/painel.php'), ENT_QUOTES, 'UTF-8'); ?>" class="nav-link"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="6"></circle><path d="m20 20-4.2-4.2"></path></svg>Encontrar profissionais</a>
+                <a href="<?php echo htmlspecialchars(appPath('/access/produtos_servicos.php'), ENT_QUOTES, 'UTF-8'); ?>" class="nav-link nav-products" data-nav-products><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 9.5 5 4h14l2 5.5M4 10h16v10H4z"></path><path d="M9 20v-5h6v5"></path></svg>Produtos<span class="nav-products-badge">NOVO</span></a>
+                <a href="<?php echo htmlspecialchars(appPath('/index.html') . '#como-funciona', ENT_QUOTES, 'UTF-8'); ?>" class="nav-link"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 10v6m0-9h.01"></path></svg>Como funciona</a>
+                <div class="relative" id="categories-wrapper"><button id="categories-toggle" class="nav-link" type="button" aria-expanded="false" aria-controls="categories-menu"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 9.5 5 4h14l2 5.5M4 10h16v10H4z"></path><path d="M9 20v-5h6v5"></path></svg>Categorias<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button>
+                    <div id="categories-menu" class="category-dropdown is-hidden absolute left-1/2 top-[calc(100%+20px)] z-50 w-72 -translate-x-1/2 rounded-[10px] border border-slate-100 bg-white p-2 shadow-lg" role="menu"><a href="?category=casa-reforma" class="category-item" role="menuitem"><span>⌂</span>Casa e Reforma</a><a href="?category=instalacoes-manutencao" class="category-item" role="menuitem"><span>⌕</span>Instalações e Manutenção</a><a href="?category=tecnologia" class="category-item" role="menuitem"><span>▣</span>Tecnologia</a><a href="?category=eventos" class="category-item" role="menuitem"><span>☆</span>Eventos</a><a href="?category=outros" class="category-item" role="menuitem"><span>•••</span>Outros</a></div>
+                </div>
+            </div>
+            <?php if (!$isLoggedIn): ?><div class="hidden shrink-0 items-center gap-5 lg:flex"><a href="<?php echo htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8'); ?>" class="text-sm font-semibold text-white/90 transition hover:text-white">Entrar</a><span class="h-7 w-px bg-white/30" aria-hidden="true"></span><a href="<?php echo htmlspecialchars(appPath('/access/login.php') . '?mode=register', ENT_QUOTES, 'UTF-8'); ?>" class="rounded-lg bg-blue-600 px-5 py-3 text-sm font-bold text-white transition duration-200 hover:-translate-y-px hover:bg-blue-500">Cadastrar como parceiro</a></div><?php else: ?><div class="relative hidden shrink-0 items-center gap-4 lg:flex"><button type="button" class="relative rounded-lg p-2 text-white/90 hover:bg-white/10" aria-label="Notificações"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"></path></svg></button><span class="h-7 w-px bg-white/30"></span><button id="account-toggle" type="button" class="flex items-center gap-2 rounded-lg px-1 py-1 text-sm font-semibold hover:bg-white/10" aria-expanded="false" aria-controls="account-menu"><span class="relative flex h-9 w-9 items-center justify-center rounded-full bg-blue-500 text-xs font-bold"><?php echo htmlspecialchars(strtoupper(substr(trim(currentUserName()), 0, 1)) ?: 'U', ENT_QUOTES, 'UTF-8'); ?><i class="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-[#0b2a52] bg-emerald-400"></i></span>Olá, <?php echo htmlspecialchars(explode(' ', trim(currentUserName()))[0] ?: 'Usuário', ENT_QUOTES, 'UTF-8'); ?>!<svg id="account-caret" class="h-4 w-4 transition-transform duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"></path></svg></button><div id="account-menu" class="category-dropdown is-hidden absolute right-0 top-[calc(100%+17px)] z-[60] w-[230px] rounded-[10px] border border-slate-100 bg-white p-2 text-slate-800 shadow-lg"><a href="<?php echo htmlspecialchars($profileEditUrl, ENT_QUOTES, 'UTF-8'); ?>" class="category-item">◯ Meu perfil</a><a href="<?php echo htmlspecialchars($profileEditUrl, ENT_QUOTES, 'UTF-8'); ?>" class="category-item">✎ Editar perfil</a><a href="<?php echo htmlspecialchars(appPath('/access/configurar_agenda.php'), ENT_QUOTES, 'UTF-8'); ?>" class="category-item">▣ Meus agendamentos</a><div class="my-2 border-t border-slate-100"></div><a href="<?php echo htmlspecialchars(appPath('/access/logout.php'), ENT_QUOTES, 'UTF-8'); ?>" class="category-item text-red-600 hover:bg-red-50 hover:text-red-700">↪ Sair</a></div></div><?php endif; ?>
+            <button id="nav-toggle" type="button" class="rounded-lg p-2 text-white transition hover:bg-white/10 lg:hidden" aria-label="Abrir menu" aria-controls="mobile-menu" aria-expanded="false"><svg class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></button>
+        </div>
+        <?php
+        $mobileDrawer = [
+            'logged_in' => $isLoggedIn,
+            'user_name' => $isLoggedIn ? currentUserName() : '',
+            'logo_url' => appPath('/img/logomenor.png'),
+            'index_url' => appPath('/index.html'),
+            'products_url' => appPath('/access/produtos_servicos.php'),
+            'directory_url' => appPath('/access/painel.php'),
+            'how_it_works_url' => appPath('/index.html') . '#como-funciona',
+            'login_url' => appPath('/access/login.php?mode=login'),
+            'signup_url' => appPath('/access/login.php?mode=register'),
+            'profile_url' => appPath('/access/perfil.php'),
+            'edit_url' => $profileEditUrl,
+            'appointments_url' => appPath('/access/configurar_agenda.php'),
+            'logout_url' => appPath('/access/logout.php'),
+        ];
+        require __DIR__ . '/_mobile_drawer.php';
+        unset($mobileDrawer);
+        ?>
+    </nav>
+    <?php if (false): ?>
+    <nav class="hidden" aria-hidden="true">
         <div class="container mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between gap-3">
-            <a href="<?php echo htmlspecialchars(appPath('/index.html'), ENT_QUOTES, 'UTF-8'); ?>" class="shrink-0 flex items-center gap-3 text-white font-black text-base sm:text-xl min-w-0">
+            <div class="hidden md:flex shrink-0 items-center gap-2">
+                <?php if ($isLoggedIn): ?><a href="<?php echo htmlspecialchars($profileEditUrl, ENT_QUOTES, 'UTF-8'); ?>" class="rounded-lg border border-white bg-white px-3 py-2 text-sm font-semibold text-blue-900 shadow-sm transition hover:bg-blue-50">Meu perfil</a><?php endif; ?>
+                <?php if ($isLoggedIn): ?><a href="<?php echo htmlspecialchars(appPath('/index.html'), ENT_QUOTES, 'UTF-8'); ?>" class="rounded-lg border border-white bg-white px-3 py-2 text-sm font-semibold text-blue-900 shadow-sm transition hover:bg-blue-50">Página inicial</a><?php endif; ?>
+                <a href="<?php echo htmlspecialchars($isLoggedIn ? $profileEditUrl : $loginUrl, ENT_QUOTES, 'UTF-8'); ?>" class="rounded-lg border border-white bg-white px-3 py-2 text-sm font-semibold text-blue-900 shadow-sm transition hover:bg-blue-50"><?php echo $isLoggedIn ? 'Editar perfil' : 'Entrar'; ?></a>
+            </div>
+            <a href="<?php echo htmlspecialchars(appPath('/index.html'), ENT_QUOTES, 'UTF-8'); ?>" class="ml-auto shrink-0 flex items-center gap-3 text-white font-black text-base sm:text-xl min-w-0">
                 <img src="../img/logomenor.png" alt="Logo Clube dos Parceiros" class="h-14 sm:h-16 w-auto object-contain">
                 <span class="truncate text-sm sm:text-xl max-w-[170px] sm:max-w-none">Clube dos Parceiros</span>
             </a>
-
-            <div class="hidden md:flex shrink-0 items-center gap-3">
-                <a href="<?php echo htmlspecialchars(appPath('/index.html'), ENT_QUOTES, 'UTF-8'); ?>" class="flow-btn flow-btn-light px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg font-semibold transition-all duration-300 transform hover:-translate-y-1 shadow-md flex items-center justify-center gap-2 border-2 text-xs sm:text-sm whitespace-nowrap">
-                    Página inicial
-                </a>
-                <?php if ($isLoggedIn): ?>
-                    <a href="<?php echo htmlspecialchars($profileEditUrl, ENT_QUOTES, 'UTF-8'); ?>" class="flow-btn flow-btn-light px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg font-semibold transition-all duration-300 transform hover:-translate-y-1 shadow-md flex items-center justify-center gap-2 border-2 text-xs sm:text-sm whitespace-nowrap">
-                        Editar perfil
-                    </a>
-                <?php else: ?>
-                    <a href="<?php echo htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8'); ?>" class="flow-btn flow-btn-light px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg font-semibold transition-all duration-300 transform hover:-translate-y-1 shadow-md flex items-center justify-center gap-2 border-2 text-xs sm:text-sm whitespace-nowrap">
-                        Login
-                    </a>
-                <?php endif; ?>
-            </div>
 
             <button id="nav-toggle" type="button" class="hamburger md:hidden text-white/90 hover:text-white transition" aria-label="Abrir menu" aria-controls="mobile-menu" aria-expanded="false">
                 <span class="hamburger-lines" aria-hidden="true">
@@ -445,21 +482,13 @@ try {
 
         <div id="mobile-menu" class="md:hidden hidden px-4 sm:px-6 pb-4 pt-2 bg-blue-900 border-t border-blue-800/60">
             <div class="grid grid-cols-1 gap-2">
-                <a href="<?php echo htmlspecialchars(appPath('/index.html'), ENT_QUOTES, 'UTF-8'); ?>" class="flow-btn flow-btn-light px-3 py-2 rounded-lg font-bold border-2 transition text-center">
-                    Página inicial
-                </a>
-                <?php if ($isLoggedIn): ?>
-                    <a href="<?php echo htmlspecialchars($profileEditUrl, ENT_QUOTES, 'UTF-8'); ?>" class="flow-btn flow-btn-light px-3 py-2 rounded-lg font-bold border-2 transition text-center">
-                        Editar perfil
-                    </a>
-                <?php else: ?>
-                    <a href="<?php echo htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8'); ?>" class="flow-btn flow-btn-light px-3 py-2 rounded-lg font-bold border-2 transition text-center">
-                        Login
-                    </a>
-                <?php endif; ?>
+                <?php if ($isLoggedIn): ?><a href="<?php echo htmlspecialchars($profileEditUrl, ENT_QUOTES, 'UTF-8'); ?>" class="rounded-lg border border-white bg-white px-3 py-2 text-center text-sm font-semibold text-blue-900 shadow-sm transition hover:bg-blue-50">Meu perfil</a><?php endif; ?>
+                <?php if ($isLoggedIn): ?><a href="<?php echo htmlspecialchars(appPath('/index.html'), ENT_QUOTES, 'UTF-8'); ?>" class="rounded-lg border border-white bg-white px-3 py-2 text-center text-sm font-semibold text-blue-900 shadow-sm transition hover:bg-blue-50">Página inicial</a><?php endif; ?>
+                <a href="<?php echo htmlspecialchars($isLoggedIn ? $profileEditUrl : $loginUrl, ENT_QUOTES, 'UTF-8'); ?>" class="rounded-lg border border-white bg-white px-3 py-2 text-center text-sm font-semibold text-blue-900 shadow-sm transition hover:bg-blue-50"><?php echo $isLoggedIn ? 'Editar perfil' : 'Entrar'; ?></a>
             </div>
         </div>
     </nav>
+    <?php endif; ?>
     <div class="pt-28 md:pt-32 px-4 md:px-8 pb-6 md:pb-8">
     
     <?php if(isset($db_error)): ?>
@@ -550,36 +579,102 @@ try {
         (function initMobileNav() {
             const toggle = document.getElementById('nav-toggle');
             const menu = document.getElementById('mobile-menu');
+            const closeButton = document.getElementById('mobile-menu-close');
+            const backdrop = menu?.querySelector('[data-mobile-menu-backdrop]');
+            const categoriesToggle = document.getElementById('mobile-categories-toggle');
+            const categoriesMenu = document.getElementById('mobile-categories-menu');
             if (!toggle || !menu) return;
 
-            const closeMenu = () => {
-                menu.classList.add('hidden');
+            let closeTimer = 0;
+            const closeMenu = (restoreFocus = false) => {
+                window.clearTimeout(closeTimer);
+                menu.classList.remove('is-open');
+                menu.setAttribute('aria-hidden', 'true');
+                document.body.classList.remove('mobile-menu-open');
                 toggle.setAttribute('aria-expanded', 'false');
                 toggle.classList.remove('is-open');
+                closeTimer = window.setTimeout(() => {
+                    if (!menu.classList.contains('is-open')) menu.classList.add('hidden');
+                }, 280);
+                if (restoreFocus) toggle.focus({ preventScroll: true });
             };
 
-            toggle.addEventListener('click', () => {
-                const isOpen = !menu.classList.contains('hidden');
-                if (isOpen) closeMenu();
-                else {
-                    menu.classList.remove('hidden');
-                    toggle.setAttribute('aria-expanded', 'true');
-                    toggle.classList.add('is-open');
-                }
+            const openMenu = () => {
+                if (window.matchMedia('(min-width: 1024px)').matches) return;
+                window.clearTimeout(closeTimer);
+                document.getElementById('categories-menu')?.classList.add('is-hidden');
+                menu.classList.remove('hidden');
+                menu.setAttribute('aria-hidden', 'false');
+                document.body.classList.add('mobile-menu-open');
+                toggle.setAttribute('aria-expanded', 'true');
+                toggle.classList.add('is-open');
+                window.requestAnimationFrame(() => menu.classList.add('is-open'));
+                window.setTimeout(() => closeButton?.focus({ preventScroll: true }), 30);
+            };
+
+            toggle.addEventListener('click', () => menu.classList.contains('hidden') ? openMenu() : closeMenu());
+            closeButton?.addEventListener('click', () => closeMenu(true));
+            backdrop?.addEventListener('click', () => closeMenu(true));
+            categoriesToggle?.addEventListener('click', () => {
+                const isOpen = !categoriesMenu?.classList.contains('hidden');
+                categoriesMenu?.classList.toggle('hidden', isOpen);
+                categoriesToggle.setAttribute('aria-expanded', String(!isOpen));
             });
 
             menu.addEventListener('click', (event) => {
-                const target = event.target;
-                if (target && target.closest && target.closest('a')) closeMenu();
+                if (event.target instanceof Element && event.target.closest('a')) closeMenu();
             });
-
             window.addEventListener('keydown', (event) => {
-                if (event.key === 'Escape') closeMenu();
+                if (event.key === 'Escape' && !menu.classList.contains('hidden')) closeMenu(true);
             });
-
             window.addEventListener('resize', () => {
-                if (window.matchMedia('(min-width: 768px)').matches) closeMenu();
+                if (window.matchMedia('(min-width: 1024px)').matches) closeMenu();
             });
+        })();
+
+        (function initDesktopCategories() {
+            const wrapper = document.getElementById('categories-wrapper');
+            const toggle = document.getElementById('categories-toggle');
+            const menu = document.getElementById('categories-menu');
+            if (!wrapper || !toggle || !menu) return;
+            const close = () => { menu.classList.add('is-hidden'); toggle.setAttribute('aria-expanded', 'false'); };
+            const open = () => { menu.classList.remove('is-hidden'); toggle.setAttribute('aria-expanded', 'true'); };
+            toggle.addEventListener('click', () => menu.classList.contains('is-hidden') ? open() : close());
+            let closeTimer;
+            const cancelClose = () => window.clearTimeout(closeTimer);
+            const closeSoon = () => { closeTimer = window.setTimeout(close, 450); };
+            wrapper.addEventListener('mouseenter', () => { cancelClose(); open(); });
+            wrapper.addEventListener('mouseleave', closeSoon);
+            menu.addEventListener('mouseenter', cancelClose);
+            menu.addEventListener('mouseleave', closeSoon);
+            document.addEventListener('click', (event) => { if (!wrapper.contains(event.target)) close(); });
+            window.addEventListener('keydown', (event) => { if (event.key === 'Escape') close(); });
+        })();
+
+        (function initNavbarScroll() {
+            const navbar = document.getElementById('site-navbar');
+            if (!navbar) return;
+            const update = () => navbar.classList.toggle('is-scrolled', window.scrollY > 6);
+            update();
+            window.addEventListener('scroll', update, { passive: true });
+        })();
+
+        (function initAccountMenu() {
+            const toggle = document.getElementById('account-toggle');
+            const menu = document.getElementById('account-menu');
+            const caret = document.getElementById('account-caret');
+            if (!toggle || !menu) return;
+            const profileLink = menu.querySelector('a.category-item');
+            if (profileLink) profileLink.setAttribute('href', '<?php echo htmlspecialchars(appPath('/access/perfil.php'), ENT_QUOTES, 'UTF-8'); ?>');
+            const appointmentsLink = menu.querySelector('a:nth-of-type(3)');
+            if (appointmentsLink) appointmentsLink.setAttribute('href', '<?php echo htmlspecialchars(appPath('/access/configurar_agenda.php'), ENT_QUOTES, 'UTF-8'); ?>');
+            
+            const close = () => { menu.classList.add('is-hidden'); toggle.setAttribute('aria-expanded', 'false'); caret?.classList.remove('rotate-180'); };
+            const open = () => { menu.classList.remove('is-hidden'); toggle.setAttribute('aria-expanded', 'true'); caret?.classList.add('rotate-180'); };
+            toggle.addEventListener('click', () => menu.classList.contains('is-hidden') ? open() : close());
+            document.addEventListener('click', (event) => { if (!menu.contains(event.target) && !toggle.contains(event.target)) close(); });
+            menu.addEventListener('click', (event) => { if (event.target.closest('a')) close(); });
+            window.addEventListener('keydown', (event) => { if (event.key === 'Escape') close(); });
         })();
 
         function showToast(message) {

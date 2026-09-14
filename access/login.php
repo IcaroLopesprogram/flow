@@ -241,7 +241,17 @@ $requestedMode = strtolower(trim((string) ($_GET['mode'] ?? $_POST['mode'] ?? 'l
 $allowedModes = ['login', 'register', 'forgot', 'reset'];
 $mode = in_array($requestedMode, $allowedModes, true) ? $requestedMode : 'login';
 $resetToken = trim((string) ($_GET['token'] ?? $_POST['token'] ?? ''));
-$nextPath = normalizeNextPath($_GET['next'] ?? $_POST['next'] ?? null, appPath('/secure/save_profile.php'));
+$rawNextPath = $_GET['next'] ?? $_POST['next'] ?? null;
+// O campo "next" também é enviado pelo próprio formulário. Guarde se ele
+// veio originalmente de um link/fluxo externo para não tratar o destino
+// padrão de cadastro como um redirecionamento obrigatório no login comum.
+$hasExplicitNextPath = isset($_GET['next'])
+    ? is_string($_GET['next']) && trim($_GET['next']) !== ''
+    : (($_POST['has_explicit_next'] ?? '') === '1');
+$defaultNextPath = $mode === 'register'
+    ? appPath('/secure/save_profile.php')
+    : appPath('/access/perfil.php');
+$nextPath = normalizeNextPath($rawNextPath, $defaultNextPath);
 
 if (isAuthenticated() && $mode !== 'forgot' && $mode !== 'reset') {
     header('Location: ' . $nextPath);
@@ -269,6 +279,21 @@ try {
     $error = 'Não foi possível inicializar o login no banco de dados.';
 }
 
+function defaultLoginDestination(PDO $pdo, int $userId): string
+{
+    try {
+        $profileStmt = $pdo->prepare('SELECT 1 FROM profissionais WHERE user_id = :user_id LIMIT 1');
+        $profileStmt->execute([':user_id' => $userId]);
+        if ($profileStmt->fetchColumn()) {
+            return appPath('/access/perfil.php');
+        }
+    } catch (PDOException $e) {
+        // Na primeira configuração, continue para o cadastro do perfil.
+    }
+
+    return appPath('/secure/save_profile.php');
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $error === '') {
     if (!verifyCsrfTokenOrFail($_POST['csrf_token'] ?? null)) {
         $error = 'Sessão expirada. Atualize a página e tente novamente.';
@@ -292,12 +317,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $error === '') {
                 $error = 'Muitas tentativas de cadastro. Tente novamente mais tarde.';
             }
             $name = trim((string) ($_POST['nome'] ?? ''));
-            $phoneRaw = trim((string) ($_POST['telefone'] ?? ''));
-            $phone = preg_replace('/\D+/', '', $phoneRaw);
+            $phone = null;
             $formName = $name;
-            $formPhone = $phoneRaw;
-            if ($error === '' && ($name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($password) < 8 || strlen($phone) < 10 || strlen($phone) > 13)) {
-                $error = 'Preencha nome, telefone, e-mail válido e senha com pelo menos 8 caracteres.';
+            $passwordMeetsRules = strlen($password) >= 8
+                && preg_match('/[a-zA-Z]/', $password)
+                && preg_match('/\d/', $password)
+                && preg_match('/[!@#$%]/', $password);
+            if ($error === '' && ($name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || !$passwordMeetsRules)) {
+                $error = 'Preencha nome e e-mail válidos. A senha precisa ter 8 caracteres, letras, números e um caractere especial (!@#$%).';
             } elseif ($error === '') {
                 try {
                     $stmt = $pdo->prepare('INSERT INTO usuarios (nome, email, telefone, senha_hash) VALUES (:nome, :email, :telefone, :senha_hash)');
@@ -307,8 +334,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $error === '') {
                         ':telefone' => $phone,
                         ':senha_hash' => password_hash($password, PASSWORD_DEFAULT),
                     ]);
-                    $success = 'Conta criada com sucesso. Faça login para continuar.';
-                    $mode = 'login';
+                    loginUser((int) $pdo->lastInsertId(), $name, $email);
+                    // Uma conta recém-criada ainda não possui perfil profissional.
+                    header('Location: ' . appPath('/secure/save_profile.php'));
+                    exit;
                 } catch (PDOException $e) {
                     $error = 'Não foi possível criar a conta. Esse e-mail pode já estar em uso.';
                 }
@@ -408,8 +437,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $error === '') {
                     $error = 'E-mail ou senha inválidos.';
                 } else {
                     resetAttemptFailures();
-                    loginUser((int) $userRow['id'], (string) $userRow['nome'], $email);
-                    header('Location: ' . $nextPath);
+                    $userId = (int) $userRow['id'];
+                    loginUser($userId, (string) $userRow['nome'], $email);
+                    $profileDestination = defaultLoginDestination($pdo, $userId);
+                    // Contas que já possuem perfil sempre retornam ao próprio perfil após entrar.
+                    $destination = $profileDestination === appPath('/access/perfil.php')
+                        ? $profileDestination
+                        : ($hasExplicitNextPath ? $nextPath : $profileDestination);
+                    header('Location: ' . $destination);
                     exit;
                 }
             }
@@ -470,7 +505,43 @@ $csrf = ensureCsrfToken();
     <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/theme.css?v=20260513">
     <style>
-        body { font-family: 'Inter', sans-serif; background: #f0f4f8; }
+        :root { --auth-navy: var(--flow-primary); --auth-page: #f6f9fb; }
+        body { font-family: 'Inter', sans-serif; background: var(--auth-page); }
+        body > nav { display: none; }
+        .auth-layout { min-height: 100vh; display: grid; grid-template-columns: minmax(420px, 52.3%) 1fr; }
+        .auth-aside { background: var(--auth-navy); color: #fff; padding: 50px clamp(42px, 5.5vw, 78px) 66px; display: flex; flex-direction: column; }
+        .auth-brand { display: inline-flex; align-items: center; gap: 13px; color: #fff; font-size: 1.35rem; font-weight: 800; text-decoration: none; }
+        .auth-brand img { width: 48px; height: 48px; object-fit: contain; filter: brightness(0) invert(1); }
+        .auth-aside-copy { margin: auto 0; max-width: 390px; }
+        .auth-aside-copy h2 { font-size: clamp(1.7rem, 2.2vw, 2.25rem); line-height: 1.22; font-weight: 800; letter-spacing: -0.025em; }
+        .auth-aside-copy p { margin-top: 1.55rem; font-size: 1.05rem; line-height: 1.48; color: rgba(255,255,255,.96); }
+        .auth-aside-footer { font-size: .88rem; font-weight: 600; color: rgba(255,255,255,.94); }
+        .auth-content { display: flex; align-items: center; justify-content: center; padding: 42px 24px; background: var(--auth-page); }
+        .auth-mobile-brand { display: none; }
+        .auth-card { width: 100%; max-width: 350px; border: 0; border-radius: 0; box-shadow: none; background: transparent; padding: 0; }
+        .auth-card h1 { font-size: 1.25rem; letter-spacing: -0.02em; }
+        .auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; padding: 3px; background: #e9f0f5; border-radius: 10px; margin: 1.35rem 0 1rem; }
+        .auth-tab { text-align: center; border-radius: 8px; padding: .48rem .6rem; font-size: .8rem; font-weight: 600; color: #64748b; text-decoration: none; }
+        .auth-tab.is-active { background: #fff; color: #1e293b; box-shadow: 0 1px 3px rgba(15, 23, 42, .14); }
+        .auth-field { background: #fff; border-color: #d8e2e9; border-radius: 9px; padding: .64rem .85rem; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
+        .password-field { position: relative; }
+        .password-field .auth-field { padding-right: 3rem; }
+        .password-toggle { position: absolute; right: .55rem; top: 50%; transform: translateY(-50%); width: 2.25rem; height: 2.25rem; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 7px; color: #64748b; background: transparent; cursor: pointer; }
+        .password-toggle:hover, .password-toggle:focus-visible { background: var(--flow-primary-soft); color: var(--flow-primary); outline: none; }
+        .password-toggle svg { width: 1.2rem; height: 1.2rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+        .password-strength { margin-top: .65rem; }
+        .password-strength-bar { height: 4px; overflow: hidden; border-radius: 999px; background: #e2e8f0; }
+        .password-strength-bar span { display: block; width: 0; height: 100%; border-radius: inherit; background: #ef4444; transition: width .2s ease, background .2s ease; }
+        .password-rules { margin-top: .65rem; border: 1px solid #e2e8f0; border-radius: 8px; padding: .55rem .65rem; font-size: .72rem; line-height: 1.55; color: #64748b; }
+        .password-rules li::before { content: '✓'; display: inline-flex; width: 1rem; color: #94a3b8; font-weight: 800; }
+        .password-rules li.is-valid { color: #2563eb; }
+        .password-rules li.is-valid::before { color: #2563eb; }
+        .register-notice { margin-top: .9rem; text-align: center; font-size: .7rem; line-height: 1.45; color: #94a3b8; }
+        .register-notice svg { display: inline-block; width: 1rem; height: 1rem; margin-right: .35rem; vertical-align: -3px; color: #64748b; }
+        .register-notice a { color: #2563eb; font-weight: 600; text-decoration: none; }
+        .register-notice a:hover { text-decoration: underline; }
+        .auth-btn { background: var(--flow-primary) !important; border-color: var(--flow-primary) !important; border-radius: 9px; box-shadow: 0 1px 2px rgba(15,23,42,.15); padding: .68rem 1rem; }
+        .auth-btn:hover { background: var(--flow-primary-hover) !important; }
         .auth-card {
             animation: fadeUp .28s ease-out both;
         }
@@ -578,6 +649,14 @@ $csrf = ensureCsrfToken();
         .auth-btn.is-loading .btn-mini-spinner {
             display: inline-block;
         }
+        @media (max-width: 850px) {
+            .auth-layout { display: block; }
+            .auth-aside { display: none; }
+            .auth-content { min-height: 100vh; align-items: flex-start; padding-top: 42px; }
+            .auth-content-inner { width: 100%; max-width: 350px; }
+            .auth-mobile-brand { display: inline-flex; align-items: center; gap: .55rem; margin-bottom: 3rem; color: var(--auth-navy); font-weight: 800; text-decoration: none; }
+            .auth-mobile-brand img { width: 32px; height: 32px; object-fit: contain; }
+        }
     </style>
 </head>
 <body class="min-h-screen bg-slate-50 text-slate-900 page-enter">
@@ -631,11 +710,28 @@ $csrf = ensureCsrfToken();
         </div>
     </nav>
 
-    <div class="pt-28 flex items-center justify-center px-4 py-10">
-        <main class="auth-card w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-sm p-6">
+    <div class="auth-layout">
+        <aside class="auth-aside">
+            <a class="auth-brand" href="<?php echo htmlspecialchars(appPath('/index.html'), ENT_QUOTES, 'UTF-8'); ?>">
+                <img src="../img/logomenor.png" alt="">
+                <span>Clube dos Parceiros</span>
+            </a>
+            <div class="auth-aside-copy">
+                <h2>Precisou de um serviço?<br>Encontre quem resolve.</h2>
+                <p>Encontre profissionais qualificados para pequenos reparos, instalações e manutenções. Compare, encontre especialistas perto de você e contrate sem complicação.</p>
+            </div>
+            <p class="auth-aside-footer">Dados protegidos e separados por conta.</p>
+        </aside>
+        <section class="auth-content">
+            <div class="auth-content-inner">
+            <a class="auth-mobile-brand" href="<?php echo htmlspecialchars(appPath('/index.html'), ENT_QUOTES, 'UTF-8'); ?>">
+                <img src="../img/logomenor.png" alt="">
+                <span>Clube dos Parceiros</span>
+            </a>
+        <main class="auth-card">
         <?php
-            $title = 'Entrar';
-            $subtitle = 'Acesse sua conta para criar ou editar apenas o seu perfil.';
+            $title = 'Acesse sua conta';
+            $subtitle = 'Entre ou crie sua conta para começar.';
             if ($mode === 'register') {
                 $title = 'Criar conta';
                 $subtitle = 'Crie sua conta para cadastrar seu perfil profissional.';
@@ -649,6 +745,13 @@ $csrf = ensureCsrfToken();
         ?>
         <h1 class="text-2xl font-extrabold text-slate-900 mb-1"><?php echo htmlspecialchars($title, ENT_QUOTES, 'UTF-8'); ?></h1>
         <p class="text-sm text-slate-500 mb-6"><?php echo htmlspecialchars($subtitle, ENT_QUOTES, 'UTF-8'); ?></p>
+
+        <?php if ($mode === 'login' || $mode === 'register'): ?>
+            <div class="auth-tabs" aria-label="Acesso à conta">
+                <a class="auth-tab <?php echo $mode === 'login' ? 'is-active' : ''; ?>" href="<?php echo htmlspecialchars(appPath('/access/login.php?mode=login&next=' . rawurlencode($nextPath)), ENT_QUOTES, 'UTF-8'); ?>">Entrar</a>
+                <a class="auth-tab <?php echo $mode === 'register' ? 'is-active' : ''; ?>" href="<?php echo htmlspecialchars(appPath('/access/login.php?mode=register&next=' . rawurlencode($nextPath)), ENT_QUOTES, 'UTF-8'); ?>">Criar conta</a>
+            </div>
+        <?php endif; ?>
 
         <?php if ($error !== ''): ?>
             <div class="mb-4 rounded-lg border border-red-200 bg-red-50 text-red-700 text-sm px-3 py-2"><?php echo htmlspecialchars($error, ENT_QUOTES, 'UTF-8'); ?></div>
@@ -667,15 +770,12 @@ $csrf = ensureCsrfToken();
             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8'); ?>">
             <input type="hidden" name="mode" value="<?php echo htmlspecialchars($mode, ENT_QUOTES, 'UTF-8'); ?>">
             <input type="hidden" name="next" value="<?php echo htmlspecialchars($nextPath, ENT_QUOTES, 'UTF-8'); ?>">
+            <input type="hidden" name="has_explicit_next" value="<?php echo $hasExplicitNextPath ? '1' : '0'; ?>">
 
             <?php if ($mode === 'register'): ?>
                 <div>
                     <label for="nome" class="block text-sm font-semibold text-slate-700 mb-1">Nome</label>
                     <input id="nome" name="nome" class="auth-field w-full rounded-xl border border-slate-300 px-4 py-3" value="<?php echo htmlspecialchars($formName, ENT_QUOTES, 'UTF-8'); ?>" required>
-                </div>
-                <div>
-                    <label for="telefone" class="block text-sm font-semibold text-slate-700 mb-1">Telefone</label>
-                    <input id="telefone" name="telefone" class="auth-field w-full rounded-xl border border-slate-300 px-4 py-3" placeholder="Ex: 11999998888" value="<?php echo htmlspecialchars($formPhone, ENT_QUOTES, 'UTF-8'); ?>" required>
                 </div>
             <?php endif; ?>
 
@@ -689,7 +789,23 @@ $csrf = ensureCsrfToken();
             <?php if ($mode === 'login' || $mode === 'register'): ?>
                 <div>
                     <label for="senha" class="block text-sm font-semibold text-slate-700 mb-1">Senha</label>
-                    <input id="senha" name="senha" type="password" class="auth-field w-full rounded-xl border border-slate-300 px-4 py-3" minlength="8" required>
+                    <div class="password-field">
+                        <input id="senha" name="senha" type="password" class="auth-field w-full rounded-xl border border-slate-300 px-4 py-3" minlength="8" required>
+                        <button class="password-toggle" type="button" aria-label="Mostrar senha" aria-pressed="false" data-password-toggle="senha">
+                            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path><circle cx="12" cy="12" r="2.5"></circle></svg>
+                        </button>
+                    </div>
+                    <?php if ($mode === 'register'): ?>
+                        <div class="password-strength" aria-live="polite">
+                            <div class="flex items-center justify-between text-[11px] font-semibold text-slate-500"><span>Força da senha</span><span id="passwordStrengthLabel">Muito fraca</span></div>
+                            <div class="password-strength-bar mt-1"><span id="passwordStrengthBar"></span></div>
+                            <ul class="password-rules" id="passwordRules">
+                                <li data-rule="length">Pelo menos 8 caracteres</li>
+                                <li data-rule="lettersNumbers">Inclua letras e números</li>
+                                <li data-rule="special">Use caracteres especiais (!@#$%)</li>
+                            </ul>
+                        </div>
+                    <?php endif; ?>
                 </div>
             <?php endif; ?>
 
@@ -697,11 +813,21 @@ $csrf = ensureCsrfToken();
                 <input type="hidden" name="token" value="<?php echo htmlspecialchars($resetToken, ENT_QUOTES, 'UTF-8'); ?>">
                 <div>
                     <label for="nova_senha" class="block text-sm font-semibold text-slate-700 mb-1">Nova senha</label>
-                    <input id="nova_senha" name="nova_senha" type="password" class="auth-field w-full rounded-xl border border-slate-300 px-4 py-3" minlength="8" required>
+                    <div class="password-field">
+                        <input id="nova_senha" name="nova_senha" type="password" class="auth-field w-full rounded-xl border border-slate-300 px-4 py-3" minlength="8" required>
+                        <button class="password-toggle" type="button" aria-label="Mostrar senha" aria-pressed="false" data-password-toggle="nova_senha">
+                            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path><circle cx="12" cy="12" r="2.5"></circle></svg>
+                        </button>
+                    </div>
                 </div>
                 <div>
                     <label for="confirmar_senha" class="block text-sm font-semibold text-slate-700 mb-1">Confirmar nova senha</label>
-                    <input id="confirmar_senha" name="confirmar_senha" type="password" class="auth-field w-full rounded-xl border border-slate-300 px-4 py-3" minlength="8" required>
+                    <div class="password-field">
+                        <input id="confirmar_senha" name="confirmar_senha" type="password" class="auth-field w-full rounded-xl border border-slate-300 px-4 py-3" minlength="8" required>
+                        <button class="password-toggle" type="button" aria-label="Mostrar senha" aria-pressed="false" data-password-toggle="confirmar_senha">
+                            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path><circle cx="12" cy="12" r="2.5"></circle></svg>
+                        </button>
+                    </div>
                 </div>
             <?php endif; ?>
 
@@ -722,6 +848,9 @@ $csrf = ensureCsrfToken();
                     <span class="btn-label"><?php echo htmlspecialchars($submitLabel, ENT_QUOTES, 'UTF-8'); ?></span>
                 </span>
             </button>
+            <?php if ($mode === 'register'): ?>
+                <p class="register-notice"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 5 6v5c0 4.5 3 8.4 7 10 4-1.6 7-5.5 7-10V6l-7-3Z"></path><path d="m9 12 2 2 4-4"></path></svg>Seus dados estão protegidos e não são compartilhados.<br>Ao criar sua conta, você concorda com nossos <a href="<?php echo htmlspecialchars(appPath('/access/termos_responsabilidade.php'), ENT_QUOTES, 'UTF-8'); ?>">Termos de Uso</a> e a <a href="<?php echo htmlspecialchars(appPath('/access/politica_privacidade.php'), ENT_QUOTES, 'UTF-8'); ?>">Política de Privacidade</a>.</p>
+            <?php endif; ?>
         </form>
 
         <div class="mt-5 text-sm text-slate-600">
@@ -738,6 +867,8 @@ $csrf = ensureCsrfToken();
             <?php endif; ?>
         </div>
         </main>
+            </div>
+        </section>
     </div>
 
     <div id="loadingOverlay" class="loading-overlay" aria-hidden="true">
@@ -751,6 +882,51 @@ $csrf = ensureCsrfToken();
     </div>
 
     <script>
+        document.querySelectorAll('[data-password-toggle]').forEach((button) => {
+            button.addEventListener('click', () => {
+                const input = document.getElementById(button.dataset.passwordToggle);
+                if (!input) return;
+                const visible = input.type === 'text';
+                input.type = visible ? 'password' : 'text';
+                button.setAttribute('aria-pressed', String(!visible));
+                button.setAttribute('aria-label', visible ? 'Mostrar senha' : 'Ocultar senha');
+            });
+        });
+
+        (function initPasswordStrength() {
+            const input = document.getElementById('senha');
+            const bar = document.getElementById('passwordStrengthBar');
+            const label = document.getElementById('passwordStrengthLabel');
+            const rules = document.getElementById('passwordRules');
+            if (!input || !bar || !label || !rules) return;
+
+            const update = () => {
+                const value = input.value;
+                const state = {
+                    length: value.length >= 8,
+                    lettersNumbers: /[a-zA-Z]/.test(value) && /\d/.test(value),
+                    special: /[!@#$%]/.test(value)
+                };
+                Object.entries(state).forEach(([rule, valid]) => {
+                    const item = rules.querySelector(`[data-rule="${rule}"]`);
+                    if (item) item.classList.toggle('is-valid', valid);
+                });
+                const score = Object.values(state).filter(Boolean).length;
+                const levels = [
+                    ['Muito fraca', '0%', '#ef4444'],
+                    ['Fraca', '34%', '#ef4444'],
+                    ['Média', '67%', '#f59e0b'],
+                    ['Forte', '100%', '#2563eb']
+                ];
+                const [text, width, color] = levels[score];
+                label.textContent = text;
+                bar.style.width = width;
+                bar.style.background = color;
+            };
+            input.addEventListener('input', update);
+            update();
+        })();
+
         (function initMobileNav() {
             const toggle = document.getElementById('nav-toggle');
             const menu = document.getElementById('mobile-menu');

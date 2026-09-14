@@ -1,5 +1,8 @@
 <?php
+require_once __DIR__ . '/../secure/auth.php';
 require_once __DIR__ . '/../secure/config.php';
+
+startSecureSession();
 
 header('Content-Type: application/json; charset=UTF-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -9,6 +12,10 @@ function jsonOut(array $payload, int $status = 200): void
     http_response_code($status);
     echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
+}
+
+if (!isAuthenticated() || !currentUserIsAdmin()) {
+    jsonOut(['ok' => false, 'message' => 'Acesso não autorizado.'], 401);
 }
 
 $cfg = appConfig();

@@ -1094,7 +1094,7 @@ if (preg_match('/^[a-f0-9]{32}$/', $profilePublicId)) {
                 </script>
             <?php endif; ?>
 
-            <form method="post" enctype="multipart/form-data" id="profileForm" class="bg-white rounded-2xl md:rounded-3xl border border-slate-200 shadow-sm p-4 sm:p-6 md:p-8">
+            <form method="post" enctype="multipart/form-data" id="profileForm" novalidate class="bg-white rounded-2xl md:rounded-3xl border border-slate-200 shadow-sm p-4 sm:p-6 md:p-8">
                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8'); ?>">
                 <input type="hidden" name="current_step" id="current_step" value="<?php echo (int) $activeStep; ?>">
                 <input type="hidden" name="youtube" value="<?php echo htmlspecialchars($formValues['youtube'], ENT_QUOTES, 'UTF-8'); ?>">
@@ -1532,6 +1532,19 @@ if (preg_match('/^[a-f0-9]{32}$/', $profilePublicId)) {
                 return true;
             }
 
+            function validateProfileBeforeSubmit() {
+                const requiredSteps = [1, 3, 4];
+                for (const step of requiredSteps) {
+                    if (!validateStep(step)) {
+                        currentStep = step;
+                        updateStepper();
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                        return false;
+                    }
+                }
+                return true;
+            }
+
             function updateStepper() {
                 stepPanels.forEach((panel, idx) => {
                     const isActive = idx + 1 === currentStep;
@@ -1608,6 +1621,12 @@ if (preg_match('/^[a-f0-9]{32}$/', $profilePublicId)) {
                 currentStepInput.value = '4';
 
                 if (didProgrammaticSubmit) {
+                    return;
+                }
+
+                // Evita no Chrome Android o bloqueio por campos obrigatorios ocultos em outras etapas.
+                if (!validateProfileBeforeSubmit()) {
+                    ev.preventDefault();
                     return;
                 }
 

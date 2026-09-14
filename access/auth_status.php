@@ -13,7 +13,9 @@ header('Pragma: no-cache');
 
 echo json_encode([
     'authenticated' => isAuthenticated(),
+    'user_name' => currentUserName(),
     'edit_profile_url' => $profileEditUrl,
     'login_url' => $loginUrl,
+    'logout_url' => appPath('/access/logout.php'),
 ], JSON_UNESCAPED_SLASHES);
 

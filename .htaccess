@@ -3,6 +3,9 @@
 
     # Allow only the public endpoint needed by the app
     RewriteRule ^secure/save_profile\.php$ - [L]
+    RewriteRule ^secure/conta\.php$ - [L]
+    RewriteRule ^secure/ibge_locations\.php$ - [L]
+    RewriteRule ^secure/configurar_agenda\.php$ access/configurar_agenda.php [R=302,L]
 
     # Block dotfiles (allow ACME challenge)
     RewriteRule (^|/)\.(?!well-known/) - [F,L]

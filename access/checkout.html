@@ -3,25 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Assine o plano profissional do Clube dos Parceiros para criar seu perfil e receber pedidos de orçamento na sua região. Cancelamento a qualquer momento.">
+    <meta name="description" content="Crie gratuitamente seu perfil profissional no Clube dos Parceiros e receba pedidos de orçamento na sua região.">
     <link rel="canonical" href="https://clubedosparceiros.cloud/access/checkout.html">
     <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
 
     <meta property="og:site_name" content="Clube dos Parceiros">
     <meta property="og:type" content="website">
-    <meta property="og:title" content="Assinatura para Profissionais - Clube dos Parceiros">
+    <meta property="og:title" content="Cadastro gratuito para Profissionais - Clube dos Parceiros">
     <meta property="og:description" content="Crie seu perfil profissional e comece a receber clientes.">
     <meta property="og:url" content="https://clubedosparceiros.cloud/access/checkout.html">
     <meta property="og:image" content="https://clubedosparceiros.cloud/img/logo.png">
     <meta property="og:image:alt" content="Logo do Clube dos Parceiros">
 
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Assinatura para Profissionais - Clube dos Parceiros">
+    <meta name="twitter:title" content="Cadastro gratuito para Profissionais - Clube dos Parceiros">
     <meta name="twitter:description" content="Crie seu perfil profissional e comece a receber clientes.">
     <meta name="twitter:image" content="https://clubedosparceiros.cloud/img/logo.png">
 
     <meta name="theme-color" content="#1A3D63">
-    <title>Assinatura para Profissionais - Clube dos Parceiros</title>
+    <title>Cadastro gratuito para Profissionais - Clube dos Parceiros</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="icon" href="/img/logomenor.png" type="image/png">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -116,7 +116,7 @@
         </div>
     </nav>
 
-    <!-- Seção de Hero / Assinatura -->
+    <!-- Seção de Hero / Cadastro -->
     <section class="pt-28 pb-12 sm:pt-32 sm:pb-16 px-4 sm:px-6 lg:px-8">
         <div class="max-w-4xl mx-auto text-center mb-12" data-aos="fade-up">
             <!-- Badge -->
@@ -131,7 +131,7 @@
             
             <!-- Subtítulo -->
             <p class="text-lg text-gray-600 max-w-2xl mx-auto">
-                Por apenas <span class="font-bold text-gray-900">R$5 por mês</span>, você cria seu perfil no Clube dos Parceiros e aparece para pessoas que estão procurando serviços de manutenção na sua região.
+                Crie seu perfil gratuitamente no Clube dos Parceiros e apareça para pessoas que estão procurando serviços de manutenção na sua região.
             </p>
         </div>
 
@@ -139,14 +139,12 @@
         <div class="max-w-md mx-auto" data-aos="zoom-in" data-aos-delay="200">
             <div class="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 card-shadow relative overflow-hidden transition-all duration-300 hover:shadow-2xl hover:-translate-y-2">
                 <div class="text-center mb-8">
-                    <h3 class="text-xl font-bold text-gray-900 mb-2">Plano Profissional</h3>
+                    <h3 class="text-xl font-bold text-gray-900 mb-2">Cadastro Profissional</h3>
                     <div class="flex items-center justify-center gap-1">
-                        <span class="text-2xl font-semibold text-gray-900">R$</span>
-                        <span class="text-5xl sm:text-6xl font-black text-professional-blue">5</span>
-                        <span class="text-gray-500 font-medium">/ mês</span>
+                        <span class="text-4xl sm:text-5xl font-black text-professional-blue">Grátis</span>
                     </div>
                     <p class="mt-4 text-sm text-gray-500 font-medium">
-                        Sem contrato • Cancele quando quiser
+                        Sem custo e sem compromisso
                     </p>
                     <p class="mt-2 text-xs text-gray-500">
                         <a class="underline" href="login.php?mode=login&next=%2Faccess%2Fcheckout.html">Fazer login</a> para continuar.
@@ -184,7 +182,7 @@
                 <!-- Botão CTA -->
                 <div class="text-center">
                     <button id="startCheckoutBtn" class="flow-btn block w-full border-2 font-bold py-4 px-6 rounded-2xl transition-all transform hover:scale-[1.05] active:scale-95 shadow-lg shadow-blue-200">
-                        Assinar agora
+                        Criar perfil grátis
                     </button>
                     <p class="mt-4 text-xs text-gray-400">
                         Leva menos de 2 minutos para começar.
@@ -250,7 +248,7 @@
     <footer class="py-12 border-t border-gray-200" data-aos="fade-in">
         <div class="max-w-4xl mx-auto px-4 text-center">
             <p class="text-sm text-gray-500 italic">
-                A assinatura serve apenas para manter seu perfil ativo e visível dentro da plataforma.
+                O cadastro é gratuito para criar e manter seu perfil visível na plataforma.
             </p>
         </div>
     </footer>
@@ -259,26 +257,26 @@
         // Inicializa os ícones Lucide
         lucide.createIcons();
 
-        async function startCheckout() {
+        async function startRegistration() {
             const btn = document.getElementById('startCheckoutBtn');
             if (btn) {
                 btn.disabled = true;
-                btn.textContent = 'Abrindo checkout...';
+                    btn.textContent = 'Abrindo cadastro...';
             }
 
             try {
                 const res = await fetch('create_checkout_session.php', { method: 'POST' });
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok || !data.ok || !data.url) {
-                    throw new Error(data.message || 'Não foi possível iniciar o checkout.');
+                    throw new Error(data.message || 'Não foi possível iniciar o cadastro.');
                 }
                 window.location.href = data.url;
             } catch (e) {
-                alert(e.message || 'Erro ao iniciar checkout.');
+                alert(e.message || 'Erro ao iniciar cadastro.');
             } finally {
                 if (btn) {
                     btn.disabled = false;
-                    btn.textContent = 'Assinar agora';
+                    btn.textContent = 'Criar perfil grátis';
                 }
             }
         }
@@ -287,7 +285,7 @@
         if (startBtn) {
             startBtn.addEventListener('click', (ev) => {
                 ev.preventDefault();
-                startCheckout();
+                startRegistration();
             });
         }
 

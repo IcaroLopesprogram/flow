@@ -156,6 +156,7 @@ function applySecurityHeaders(): void
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://unpkg.com",
         "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com",
         "img-src 'self' data: blob: https:",
+        "media-src 'self' blob: https:",
         "connect-src 'self' https://api.resend.com",
     ]);
     header('Content-Security-Policy: ' . $csp);
@@ -223,6 +224,12 @@ function appBaseUrl(): string
 
     if ($cfg['app_url'] !== '') {
         return $cfg['app_url'];
+    }
+
+    // Fora do ambiente local, uma URL canônica é necessária para evitar que
+    // cabeçalhos Host controlados pelo cliente gerem links sensíveis.
+    if (!isLocalEnvironment()) {
+        return '';
     }
 
     return $scheme . '://' . $hostHeader;

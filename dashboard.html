@@ -27,8 +27,8 @@
 
             <form id="login-form" class="mt-8 space-y-4">
                 <div>
-                    <label for="login-user" class="block text-sm font-semibold text-slate-700 mb-1">Usuário</label>
-                    <input id="login-user" name="login-user" type="text" autocomplete="username" required
+                    <label for="login-user" class="block text-sm font-semibold text-slate-700 mb-1">E-mail administrativo</label>
+                    <input id="login-user" name="login-user" type="email" autocomplete="username" required
                            class="w-full rounded-xl border border-slate-300 px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-300"
                            placeholder="Digite seu usuário">
                 </div>
@@ -134,10 +134,15 @@
                     <div class="rounded-2xl border border-slate-200 p-5">
                         <p class="text-sm font-black text-slate-900 mb-2">Passo 1</p>
                         <label for="link" class="block text-base font-bold text-slate-800 mb-2">Link do vídeo</label>
-                        <input id="link" name="link" type="url" required
+                        <input id="link" name="link" type="url"
                                class="w-full rounded-xl border border-slate-300 px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-300"
                                placeholder="Cole o link do YouTube aqui">
-                        <p id="link-error" class="hidden mt-2 text-sm font-semibold text-red-600">Não consegui entender esse link. Cole um link do YouTube e tente novamente.</p>
+                        <div class="mt-4">
+                            <label for="video-file" class="block text-base font-bold text-slate-800 mb-2">Ou envie um MP4</label>
+                            <input id="video-file" name="video_file" type="file" accept="video/mp4"
+                                   class="w-full rounded-xl border border-slate-300 px-4 py-3 text-base bg-white focus:outline-none focus:ring-2 focus:ring-blue-300">
+                        </div>
+                        <p id="link-error" class="hidden mt-2 text-sm font-semibold text-red-600">Não consegui entender esse vídeo. Cole um link do YouTube ou escolha um MP4.</p>
 
                         <div id="preview-wrap" class="hidden mt-4">
                             <div class="relative w-full pt-[56.25%] bg-slate-200 rounded-xl overflow-hidden border border-slate-200">
@@ -210,14 +215,18 @@
     <script>
         /**
          * Refatoração focada em usabilidade (sem remover funcionalidades):
-         * - (ALTERAÇÃO) Login simples: usuário/senha admin/admin, bloqueia acesso sem login
+         * - Login administrativo validado no servidor
          * - (ALTERAÇÃO) Formulário em 3 passos e com prévia automática do vídeo
          * - (ALTERAÇÃO) Textos mais simples (sem termos técnicos)
          * - Mantém a MESMA estrutura e chave de dados para não quebrar a integração com `index.html`
          */
 
-        const VIDEO_STORAGE_KEY = 'flow_videos_v1'; // integração com index.html (não mudar)
-        const AUTH_STORAGE_KEY = 'flow_videos_dashboard_auth_v1';
+        const VIDEO_STORAGE_KEY = 'flow_videos_v1'; // fallback local e compatibilidade antiga
+        const VIDEO_API_URL = 'access/videos.php';
+        const ADMIN_STATUS_URL = 'access/admin_status.php';
+        const ADMIN_AUTH_URL = 'access/admin_auth.php';
+        const ADMIN_LOGOUT_URL = 'access/admin_logout.php';
+        let adminCsrfToken = '';
 
         // ---------------------------
         // Estatísticas (DB)
@@ -414,6 +423,27 @@
             localStorage.setItem(VIDEO_STORAGE_KEY, JSON.stringify(videos));
         }
 
+        async function fetchVideosFromServer() {
+            const res = await fetch(VIDEO_API_URL, { cache: 'no-store' });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data || !data.ok) {
+                throw new Error((data && data.message) ? data.message : 'Não foi possível carregar os vídeos.');
+            }
+            const normalized = coerceVideosArray(data.videos || []);
+            saveVideos(normalized);
+            return normalized;
+        }
+
+        async function refreshVideos() {
+            try {
+                videos = await fetchVideosFromServer();
+            } catch (e) {
+                videos = loadVideos();
+                showToast(e && e.message ? e.message : 'Usando vídeos salvos neste navegador.');
+            }
+            renderList(videos);
+        }
+
         // ---------------------------
         // UI: toast/feedback
         // ---------------------------
@@ -536,6 +566,8 @@
             renderList(videos);
         }
 
+        let videoFilePreviewUrl = '';
+
         function resetForm() {
             const form = document.getElementById('video-form');
             const heading = document.getElementById('form-heading');
@@ -548,6 +580,11 @@
             const previewMedia = document.getElementById('preview-media');
             const saveBtn = document.getElementById('save-button');
             if (!form || !heading || !badge || !cancel) return;
+
+            if (videoFilePreviewUrl) {
+                URL.revokeObjectURL(videoFilePreviewUrl);
+                videoFilePreviewUrl = '';
+            }
 
             form.reset();
             editingId = null;
@@ -584,6 +621,7 @@
             editingId = id;
 
             document.getElementById('link').value = item.src; // src já normalizado
+            document.getElementById('video-file').value = '';
             document.getElementById('title').value = item.title;
             document.getElementById('description').value = item.description || '';
 
@@ -598,14 +636,29 @@
             document.getElementById('step-3')?.classList.remove('hidden');
         }
 
-        function deleteVideo(id) {
+        async function deleteVideo(id) {
             const item = videos.find(v => v.id === id);
             if (!item) return;
 
             const ok = window.confirm(`Excluir o vídeo "${item.title}"?`);
             if (!ok) return;
 
-            videos = videos.filter(v => v.id !== id);
+            const formData = new FormData();
+            formData.append('action', 'delete');
+            formData.append('id', id);
+            formData.append('csrf_token', adminCsrfToken);
+
+            try {
+                const res = await fetch(VIDEO_API_URL, { method: 'POST', body: formData });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data || !data.ok) {
+                    throw new Error((data && data.message) ? data.message : 'Não foi possível excluir o vídeo.');
+                }
+                videos = coerceVideosArray(data.videos || []);
+            } catch (e) {
+                showToast(e && e.message ? e.message : 'Não foi possível excluir o vídeo.');
+                return;
+            }
 
             if (editingId === id) resetForm();
 
@@ -613,19 +666,34 @@
             showToast('Vídeo excluído com sucesso.');
         }
 
-        function upsertVideoFromForm() {
+        async function upsertVideoFromForm() {
             const titleInput = document.getElementById('title');
             const descInput = document.getElementById('description');
             const linkInput = document.getElementById('link');
-            if (!titleInput || !descInput || !linkInput) return;
+            const fileInput = document.getElementById('video-file');
+            const saveBtn = document.getElementById('save-button');
+            if (!titleInput || !descInput || !linkInput || !fileInput) return;
 
             const title = sanitizeText(titleInput.value, 80);
             const description = sanitizeText(descInput.value, 200);
-            const normalized = currentNormalized ?? normalizeVideoLink(linkInput.value);
+            const file = (fileInput.files && fileInput.files[0]) ? fileInput.files[0] : null;
+            const normalized = file ? { kind: 'mp4', src: videoFilePreviewUrl } : (currentNormalized ?? normalizeVideoLink(linkInput.value));
 
             if (!normalized) {
-                showToast('Cole um link do YouTube válido para continuar.');
+                showToast('Cole um link do YouTube ou escolha um MP4.');
                 linkInput.focus();
+                return;
+            }
+
+            if (file && file.type && file.type !== 'video/mp4') {
+                showToast('Envie um vídeo em MP4.');
+                fileInput.focus();
+                return;
+            }
+
+            if (file && file.size > 100 * 1024 * 1024) {
+                showToast('O vídeo deve ter no máximo 100MB.');
+                fileInput.focus();
                 return;
             }
 
@@ -635,44 +703,38 @@
                 return;
             }
 
-            if (editingId) {
-                const idx = videos.findIndex(v => v.id === editingId);
-                if (idx === -1) {
-                    resetForm();
-                    showToast('Edição cancelada (item não encontrado).');
-                    return;
+            const wasEditing = Boolean(editingId);
+            const formData = new FormData();
+            formData.append('action', 'upsert');
+            if (editingId) formData.append('id', editingId);
+            formData.append('title', title);
+            formData.append('description', description);
+            formData.append('link', file ? '' : linkInput.value.trim());
+            formData.append('csrf_token', adminCsrfToken);
+            if (file) formData.append('video_file', file);
+
+            try {
+                if (saveBtn) {
+                    saveBtn.setAttribute('disabled', 'disabled');
+                    saveBtn.textContent = 'Salvando...';
                 }
-
-                videos[idx] = {
-                    ...videos[idx],
-                    title,
-                    description,
-                    kind: normalized.kind,
-                    src: normalized.src,
-                    updatedAt: new Date().toISOString(),
-                };
-
-                syncAndRender();
-                resetForm();
-                showToast('Vídeo atualizado com sucesso.');
+                const res = await fetch(VIDEO_API_URL, { method: 'POST', body: formData });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data || !data.ok) {
+                    throw new Error((data && data.message) ? data.message : 'Não foi possível salvar o vídeo.');
+                }
+                videos = coerceVideosArray(data.videos || []);
+            } catch (e) {
+                showToast(e && e.message ? e.message : 'Não foi possível salvar o vídeo.');
+                handleLinkPreviewAndSteps();
                 return;
+            } finally {
+                if (saveBtn) saveBtn.textContent = 'Salvar vídeo';
             }
-
-            videos = [
-                {
-                    id: makeId(),
-                    title,
-                    description,
-                    kind: normalized.kind,
-                    src: normalized.src,
-                    updatedAt: new Date().toISOString(),
-                },
-                ...videos,
-            ];
 
             syncAndRender();
             resetForm();
-            showToast('Vídeo salvo com sucesso.');
+            showToast(wasEditing ? 'Vídeo atualizado com sucesso.' : 'Vídeo salvo com sucesso.');
         }
 
         // ---------------------------
@@ -732,14 +794,32 @@
 
         function handleLinkPreviewAndSteps() {
             const linkInput = document.getElementById('link');
+            const fileInput = document.getElementById('video-file');
             const titleInput = document.getElementById('title');
             const step2 = document.getElementById('step-2');
             const step3 = document.getElementById('step-3');
             const linkError = document.getElementById('link-error');
             const saveBtn = document.getElementById('save-button');
-            if (!linkInput || !titleInput || !step2 || !step3 || !linkError || !saveBtn) return;
+            if (!linkInput || !fileInput || !titleInput || !step2 || !step3 || !linkError || !saveBtn) return;
 
             const linkValue = linkInput.value.trim();
+            const file = (fileInput.files && fileInput.files[0]) ? fileInput.files[0] : null;
+
+            if (file) {
+                currentNormalized = { kind: 'mp4', src: videoFilePreviewUrl };
+                linkError.classList.add('hidden');
+                setPreview(currentNormalized, titleInput.value.trim());
+                step2.classList.remove('hidden');
+                if (titleInput.value.trim()) {
+                    step3.classList.remove('hidden');
+                    saveBtn.removeAttribute('disabled');
+                } else {
+                    step3.classList.add('hidden');
+                    saveBtn.setAttribute('disabled', 'disabled');
+                }
+                return;
+            }
+
             if (!linkValue) {
                 currentNormalized = null;
                 linkError.classList.add('hidden');
@@ -779,6 +859,29 @@
             handleLinkPreviewAndSteps();
         });
 
+        document.getElementById('video-file').addEventListener('change', () => {
+            const fileInput = document.getElementById('video-file');
+            const linkInput = document.getElementById('link');
+            const file = (fileInput.files && fileInput.files[0]) ? fileInput.files[0] : null;
+
+            if (videoFilePreviewUrl) {
+                URL.revokeObjectURL(videoFilePreviewUrl);
+                videoFilePreviewUrl = '';
+            }
+
+            if (file) {
+                if (file.type && file.type !== 'video/mp4') {
+                    showToast('Envie um vídeo em MP4.');
+                    fileInput.value = '';
+                } else {
+                    videoFilePreviewUrl = URL.createObjectURL(file);
+                    if (linkInput) linkInput.value = '';
+                }
+            }
+
+            handleLinkPreviewAndSteps();
+        });
+
         document.getElementById('title').addEventListener('input', () => {
             handleLinkPreviewAndSteps();
         });
@@ -787,26 +890,33 @@
         // (ALTERAÇÃO) Login simples
         // ---------------------------
 
-        function setLoggedIn(value) {
-            localStorage.setItem(AUTH_STORAGE_KEY, value ? '1' : '');
-        }
-
-        function isLoggedIn() {
-            return localStorage.getItem(AUTH_STORAGE_KEY) === '1';
-        }
-
-        function showScreen() {
+        function showScreen(isAuthenticated) {
             const login = document.getElementById('login-screen');
             const app = document.getElementById('app-screen');
             if (!login || !app) return;
 
-            if (isLoggedIn()) {
+            if (isAuthenticated) {
                 login.classList.add('hidden');
                 app.classList.remove('hidden');
             } else {
                 app.classList.add('hidden');
                 login.classList.remove('hidden');
             }
+        }
+
+        async function loadAdminSession() {
+            const response = await fetch(ADMIN_STATUS_URL, { cache: 'no-store', credentials: 'same-origin' });
+            const data = await response.json().catch(() => ({}));
+            adminCsrfToken = (data && data.csrf_token) ? data.csrf_token : '';
+            return Boolean(response.ok && data && data.authenticated);
+        }
+
+        async function startAdminApp() {
+            showScreen(true);
+            await refreshVideos();
+            resetForm();
+            focusForm();
+            loadDashboardStats();
         }
 
         (function initMobileNav() {
@@ -844,52 +954,57 @@
             });
         })();
 
-        document.getElementById('login-form').addEventListener('submit', (event) => {
+        document.getElementById('login-form').addEventListener('submit', async (event) => {
             event.preventDefault();
             const user = document.getElementById('login-user').value.trim();
             const pass = document.getElementById('login-pass').value.trim();
             const error = document.getElementById('login-error');
 
-                if (user === 'admin' && pass === 'admin') {
-                    setLoggedIn(true);
-                    error.classList.add('hidden');
-                    showScreen();
-                    // inicia app
-                    videos = loadVideos();
-                    renderList(videos);
-                    resetForm();
-                    focusForm();
-                    loadDashboardStats();
-                    return;
-                }
-
-            error.classList.remove('hidden');
+            const formData = new FormData();
+            formData.append('email', user);
+            formData.append('password', pass);
+            formData.append('csrf_token', adminCsrfToken);
+            try {
+                const response = await fetch(ADMIN_AUTH_URL, { method: 'POST', body: formData, credentials: 'same-origin' });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || !data || !data.ok) throw new Error(data.message || 'Não foi possível entrar.');
+                adminCsrfToken = data.csrf_token || adminCsrfToken;
+                error.classList.add('hidden');
+                await startAdminApp();
+            } catch (e) {
+                error.textContent = e && e.message ? e.message : 'E-mail ou senha incorretos.';
+                error.classList.remove('hidden');
+            }
         });
 
         const logoutButton = document.getElementById('logout-button');
         const logoutButtonMobile = document.getElementById('logout-button-mobile');
         [logoutButton, logoutButtonMobile].filter(Boolean).forEach((btn) => {
-            btn.addEventListener('click', () => {
-                setLoggedIn(false);
-                showScreen();
+            btn.addEventListener('click', async () => {
+                const formData = new FormData();
+                formData.append('csrf_token', adminCsrfToken);
+                await fetch(ADMIN_LOGOUT_URL, { method: 'POST', body: formData, credentials: 'same-origin' }).catch(() => {});
+                adminCsrfToken = '';
+                showScreen(false);
             });
         });
 
         // Inicialização
-        window.addEventListener('load', () => {
-            showScreen();
-            if (isLoggedIn()) {
-                videos = loadVideos();
-                renderList(videos);
-                resetForm();
-                focusForm();
-                loadDashboardStats();
+        window.addEventListener('load', async () => {
+            try {
+                if (await loadAdminSession()) {
+                    await startAdminApp();
+                    return;
+                }
+            } catch (e) {
+                // Sem sessão válida: mantenha a tela de login.
             }
+            showScreen(false);
         });
 
         // Atualiza automaticamente se outro lugar alterar a lista de vídeos
         window.addEventListener('storage', (event) => {
-            if (event && event.key === VIDEO_STORAGE_KEY && isLoggedIn()) {
+            if (event && event.key === VIDEO_STORAGE_KEY && !document.getElementById('app-screen').classList.contains('hidden')) {
                 videos = loadVideos();
                 renderList(videos);
             }
